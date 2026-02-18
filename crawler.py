@@ -38,39 +38,21 @@ def make_filename(i: int) -> str:
     return f"{i:04d}.html"
 
 
-def is_html_response(resp: requests.Response) -> bool:
-    """
-    Проверяем, что скачали именно HTML-текст
-    """
-    content_type = resp.headers.get("Content-Type", "").lower()
-    return "text/html" in content_type
-
-
 def download_page(session: requests.Session, url: str) -> tuple[bool, bytes, str]:
     """
     Скачивает страницу и возвращает:
     - ok: успешно ли (True/False)
-    - content: байты страницы (HTML как есть)
-    - info: строка с пояснением (для логов/index при ошибке)
+    - content: байты страницы (HTML)
+    - info: строка с пояснением при ошибке
     """
     try:
         resp = session.get(url, timeout=TIMEOUT, allow_redirects=True)
 
-        # 1) код ответа должен быть 200
+        #  проверяем код ответа
         if resp.status_code != 200:
             return False, b"", f"HTTP {resp.status_code}"
 
-        # 2) должен быть HTML (текстовая страница)
-        if not is_html_response(resp):
-            ct = resp.headers.get("Content-Type", "")
-            return False, b"", f"Not HTML (Content-Type: {ct})"
-
-        # 3) контент должен быть не пустой (минимальная проверка)
-        content = resp.content
-        if len(content) < 100:
-            return False, b"", "Too small content"
-
-        return True, content, "OK"
+        return True, resp.content, "OK"
 
     except Exception as e:
         return False, b"", f"ERROR {type(e).__name__}: {e}"
@@ -79,9 +61,6 @@ def download_page(session: requests.Session, url: str) -> tuple[bool, bytes, str
 def main():
     # 1) Читаем список ссылок
     urls = read_urls(URLS_FILE)
-    if not urls:
-        print(f"Файл {URLS_FILE} пуст или не найден.")
-        return
 
     # 2) Готовим папки
     DUMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,8 +73,6 @@ def main():
     })
 
     index_lines = []
-    ok_count = 0
-    fail_count = 0
 
     # 4) Идём по ссылкам и скачиваем
     for i, url in enumerate(urls, start=1):
@@ -105,25 +82,20 @@ def main():
         ok, content, info = download_page(session, url)
 
         if ok:
-            # Сохраняем HTML как есть (не чистим разметку)
+            # Сохраняем HTML
             filepath.write_bytes(content)
             index_lines.append(f"{filename}\t{url}")
-            ok_count += 1
             print(f"{i}/{len(urls)} OK")
         else:
-            # В случае ошибки файл можно не создавать, но строку в index добавим с пометкой FAIL
+            # В случае ошибки файл не создаваем, но строку в index добавляем с пометкой FAIL
             index_lines.append(f"{filename}\t{url}\tFAIL {info}")
-            fail_count += 1
-            print(f"[{i}/{len(urls)}] FAIL {url} ({info})")
+            print(f"[{i}/{len(urls)}] FAIL")
 
         # Пауза между запросами
         time.sleep(SLEEP_SECONDS)
 
     # 5) сохраняем index.txt
     INDEX_FILE.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
-
-    print(f"\nУспешно: {ok_count}")
-    print(f"Ошибок:  {fail_count}")
 
 
 if __name__ == "__main__":

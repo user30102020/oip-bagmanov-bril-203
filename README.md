@@ -10,3 +10,11 @@
 
 ## Примечания по коду
 - В коде присутствуют **поясняющие комментарии**.
+
+## Запуск (к заданию №2)
+
+Перед запуском:
+```shell
+pip install beautifulsoup4 lxml nltk pymorphy3 pymorphy3-dicts-ru
+python -c "import nltk; nltk.download('stopwords')"
+```

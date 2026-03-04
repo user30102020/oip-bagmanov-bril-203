@@ -11,10 +11,14 @@
 ## Примечания по коду
 - В коде присутствуют **поясняющие комментарии**.
 
-## Запуск (к заданию №2)
+## Запуск (к заданию №3)
 
-Перед запуском:
+1. Построить инвертированный индекс:
 ```shell
-pip install beautifulsoup4 lxml nltk pymorphy3 pymorphy3-dicts-ru
-python -c "import nltk; nltk.download('stopwords')"
+python task3/inverted_index.py
+```
+
+2. Выполнить булев поиск по индексу:
+```shell
+python task3/boolean_search.py "являться AND январь"
 ```

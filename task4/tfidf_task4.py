@@ -1,61 +1,41 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
 from math import log
 from pathlib import Path
-import re
-
-from bs4 import BeautifulSoup
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DUMP_DIR = PROJECT_ROOT / "dump"
-TOKENS_ALL_FILE = PROJECT_ROOT / "tokens_all.txt"
-LEMMAS_ALL_FILE = PROJECT_ROOT / "lemmas_all.txt"
+TOKENS_DIR = PROJECT_ROOT / "tokens"
+LEMMAS_DIR = PROJECT_ROOT / "lemmas"
 
 TASK4_DIR = Path(__file__).resolve().parent
 TERMS_OUT_DIR = TASK4_DIR / "tfidf_terms"
 LEMMAS_OUT_DIR = TASK4_DIR / "tfidf_lemmas"
 
-# Токен: слово на кириллице, длина 2+
-TOKEN_RE = re.compile(r"[а-яё]{2,}", re.IGNORECASE)
 
-
-@dataclass
-class DocStats:
-    doc_id: str
-    total_terms: int
-    term_counts: Counter[str]
-    lemma_counts: Counter[str]
-
-
-def html_to_text(html: str) -> str:
+def load_tokens_for_doc(path: Path) -> list[str]:
     """
-    Достаём текст из HTML и убираем script/style/noscript.
+    Читаем tokens/<doc>.txt.
+    Здесь один термин на строку.
     """
-    soup = BeautifulSoup(html, "lxml")
-    for tag in soup(["script", "style", "noscript"]):
-        tag.decompose()
-    return soup.get_text(separator=" ")
+    tokens: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        term = line.strip().lower()
+        if term:
+            tokens.append(term)
+    return tokens
 
 
-def load_terms_vocab(path: Path = TOKENS_ALL_FILE) -> set[str]:
+def load_lemma_counts_for_doc(path: Path) -> Counter[str]:
     """
-    Загружаем список терминов из задания 2.
-    """
-    return {
-        line.strip().lower()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
+    Читаем lemmas/<doc>.txt.
+    Формат строки:
+    <лемма> <токен1> <токен2> ... <токенN>
 
-
-def load_term_to_lemma(path: Path = LEMMAS_ALL_FILE) -> dict[str, str]:
+    Для леммы считаем количество её форм в строке.
     """
-    Загружаем соответствия "токен -> лемма" из задания 2.
-    """
-    term_to_lemma: dict[str, str] = {}
+    lemma_counts: Counter[str] = Counter()
 
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -64,92 +44,23 @@ def load_term_to_lemma(path: Path = LEMMAS_ALL_FILE) -> dict[str, str]:
 
         parts = line.split()
         lemma = parts[0].lower()
-        term_to_lemma[lemma] = lemma
-        for token in parts[1:]:
-            term_to_lemma[token.lower()] = lemma
+        forms = [t for t in parts[1:] if t.strip()]
+        if forms:
+            lemma_counts[lemma] += len(forms)
 
-    return term_to_lemma
-
-
-def tokenize_ru(text: str, terms_vocab: set[str]) -> list[str]:
-    """
-    Токенизируем текст и оставляем только термины из tokens_all.txt.
-    """
-    text = text.lower()
-    tokens: list[str] = []
-
-    for match in TOKEN_RE.finditer(text):
-        token = match.group(0)
-        if token in terms_vocab:
-            tokens.append(token)
-
-    return tokens
-
-
-def collect_doc_stats(
-    terms_vocab: set[str],
-    term_to_lemma: dict[str, str],
-) -> list[DocStats]:
-    """
-    Для каждого документа считаем:
-    - число терминов;
-    - частоты терминов;
-    - частоты лемм.
-    """
-    docs: list[DocStats] = []
-
-    for html_path in sorted(DUMP_DIR.glob("*.html")):
-        html = html_path.read_text(encoding="utf-8", errors="ignore")
-        text = html_to_text(html)
-        tokens = tokenize_ru(text, terms_vocab)
-
-        term_counts = Counter(tokens)
-        lemma_counts: Counter[str] = Counter()
-
-        for term, count in term_counts.items():
-            lemma = term_to_lemma.get(term, term)
-            lemma_counts[lemma] += count
-
-        docs.append(
-            DocStats(
-                doc_id=html_path.stem,
-                total_terms=len(tokens),
-                term_counts=term_counts,
-                lemma_counts=lemma_counts,
-            )
-        )
-
-    return docs
+    return lemma_counts
 
 
 def compute_idf(df_map: dict[str, int], total_docs: int) -> dict[str, float]:
     """
-    Считаем idf = ln(N / df), где:
+    IDF = ln(N / df), где:
     N  - общее число документов,
-    df - число документов, где встретился термин/лемма.
+    df - в скольких документах встретился термин/лемма.
     """
     idf_map: dict[str, float] = {}
-
     for item, df in df_map.items():
         idf_map[item] = log(total_docs / df)
-
     return idf_map
-
-
-def build_df_maps(docs: list[DocStats]) -> tuple[dict[str, int], dict[str, int]]:
-    """
-    Считаем document frequency отдельно для терминов и лемм.
-    """
-    term_df: dict[str, int] = defaultdict(int)
-    lemma_df: dict[str, int] = defaultdict(int)
-
-    for doc in docs:
-        for term in doc.term_counts.keys():
-            term_df[term] += 1
-        for lemma in doc.lemma_counts.keys():
-            lemma_df[lemma] += 1
-
-    return dict(term_df), dict(lemma_df)
 
 
 def write_doc_tfidf(
@@ -175,39 +86,64 @@ def write_doc_tfidf(
 
 
 def main() -> None:
-    # 1) Загружаем данные из задания 2
-    terms_vocab = load_terms_vocab()
-    term_to_lemma = load_term_to_lemma()
+    token_files = sorted(TOKENS_DIR.glob("*.txt"))
+    if not token_files:
+        raise RuntimeError("No files found in tokens/")
 
-    # 2) Собираем статистику по документам
-    docs = collect_doc_stats(terms_vocab, term_to_lemma)
-    total_docs = len(docs)
-    if total_docs == 0:
-        raise RuntimeError("No HTML files found in dump/")
+    # Данные по документам:
+    # doc_terms[doc_id]  -> Counter терминов
+    # doc_lemmas[doc_id] -> Counter лемм
+    # doc_total_terms[doc_id] -> общее число терминов в документе
+    doc_terms: dict[str, Counter[str]] = {}
+    doc_lemmas: dict[str, Counter[str]] = {}
+    doc_total_terms: dict[str, int] = {}
 
-    # 3) Считаем df и idf
-    term_df, lemma_df = build_df_maps(docs)
-    term_idf = compute_idf(term_df, total_docs)
-    lemma_idf = compute_idf(lemma_df, total_docs)
+    # Document frequency:
+    # в скольких документах встретился термин/лемма
+    term_df: dict[str, int] = defaultdict(int)
+    lemma_df: dict[str, int] = defaultdict(int)
 
-    # 4) Готовим папки для результатов
+    for token_file in token_files:
+        doc_id = token_file.stem
+        lemma_file = LEMMAS_DIR / f"{doc_id}.txt"
+
+        tokens = load_tokens_for_doc(token_file)
+        term_counts = Counter(tokens)
+        total_terms = len(tokens)
+
+        if lemma_file.exists():
+            lemma_counts = load_lemma_counts_for_doc(lemma_file)
+        else:
+            lemma_counts = Counter()
+
+        doc_terms[doc_id] = term_counts
+        doc_lemmas[doc_id] = lemma_counts
+        doc_total_terms[doc_id] = total_terms
+
+        # df считаем сразу в этом же цикле (без отдельной функции)
+        for term in term_counts.keys():
+            term_df[term] += 1
+        for lemma in lemma_counts.keys():
+            lemma_df[lemma] += 1
+
+    total_docs = len(doc_terms)
+    term_idf = compute_idf(dict(term_df), total_docs)
+    lemma_idf = compute_idf(dict(lemma_df), total_docs)
+
     TERMS_OUT_DIR.mkdir(parents=True, exist_ok=True)
     LEMMAS_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 5) Для каждого документа пишем два файла:
-    #    - tf-idf по терминам
-    #    - tf-idf по леммам
-    for doc in docs:
+    for doc_id in sorted(doc_terms.keys()):
         write_doc_tfidf(
-            out_path=TERMS_OUT_DIR / f"{doc.doc_id}.txt",
-            counts=doc.term_counts,
-            total_terms=doc.total_terms,
+            out_path=TERMS_OUT_DIR / f"{doc_id}.txt",
+            counts=doc_terms[doc_id],
+            total_terms=doc_total_terms[doc_id],
             idf_map=term_idf,
         )
         write_doc_tfidf(
-            out_path=LEMMAS_OUT_DIR / f"{doc.doc_id}.txt",
-            counts=doc.lemma_counts,
-            total_terms=doc.total_terms,
+            out_path=LEMMAS_OUT_DIR / f"{doc_id}.txt",
+            counts=doc_lemmas[doc_id],
+            total_terms=doc_total_terms[doc_id],
             idf_map=lemma_idf,
         )
 

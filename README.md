@@ -22,3 +22,16 @@ python task3/inverted_index.py
 ```shell
 python task3/boolean_search.py "являться AND январь"
 ```
+
+## Запуск (к заданию №4)
+
+1. Подсчитать tf-idf по терминам и леммам для всех документов:
+```shell
+python task4/tfidf_task4.py
+```
+
+2. Результаты:
+- `task4/tfidf_terms/*.txt` — tf-idf по терминам для каждого документа  
+  Формат строки: `<термин> <idf> <tf-idf>`
+- `task4/tfidf_lemmas/*.txt` — tf-idf по леммам для каждого документа  
+  Формат строки: `<лемма> <idf> <tf-idf>`

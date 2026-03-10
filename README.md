@@ -35,3 +35,19 @@ python task4/tfidf_task4.py
   Формат строки: `<термин> <idf> <tf-idf>`
 - `task4/tfidf_lemmas/*.txt` — tf-idf по леммам для каждого документа  
   Формат строки: `<лемма> <idf> <tf-idf>`
+
+## Запуск (к заданию №5)
+
+1. Построить общий векторный индекс:
+```shell
+python task5/vector_index.py
+```
+
+2. Выполнить векторный поиск:
+```shell
+python task5/vector_search.py "являться январь" 5
+```
+
+3. Результаты:
+- `task5/vector_index.json` — общий векторный индекс документов
+- `task5/vector_search.py` выводит `doc_id`, `score` и ссылку на документ

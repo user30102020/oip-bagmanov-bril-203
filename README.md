@@ -51,3 +51,20 @@ python task5/vector_search.py "являться январь" 5
 3. Результаты:
 - `task5/vector_index.json` — общий векторный индекс документов
 - `task5/vector_search.py` выводит `doc_id`, `score` и ссылку на документ
+
+## Запуск (к заданию №5-2)
+
+1. Установить Flask:
+```shell
+   pip install flask
+```
+
+2. Запустить веб-интерфейс поиска:
+```shell
+python task5/web_search.py
+```
+
+3. Открыть в браузере:
+
+   http://127.0.0.1:5000
+

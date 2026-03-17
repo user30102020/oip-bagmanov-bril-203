@@ -19,7 +19,7 @@ from vector_index import build_vector_index
 # Путь к папке, где лежит этот файл: task5/
 BASE_DIR = Path(__file__).resolve().parent
 
-# Говорим Flask, что шаблоны лежат в task5/templates
+# Говорим Flask, что шаблон лежит в task5/
 app = Flask(__name__, template_folder=str(BASE_DIR))
 
 # Загружаем индекс и служебные данные один раз при старте приложения,
